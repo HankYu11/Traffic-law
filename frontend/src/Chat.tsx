@@ -50,6 +50,7 @@ export default function Chat({
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (turns.length === 0) return
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [turns.length, turns[turns.length - 1]?.phase])
 

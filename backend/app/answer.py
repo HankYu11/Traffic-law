@@ -5,6 +5,10 @@ import json
 import re
 import time
 from datetime import date
+from functools import lru_cache
+from pathlib import Path
+
+import yaml
 
 from . import config, llm, sop
 from .index import INDEX, Hit, expand_query, status
@@ -33,6 +37,44 @@ SYSTEM = """你是臺北市政府警察局的法規與作業程序助理，服�
 """
 
 
+GLOSSARY_PATH = Path(__file__).resolve().parents[2] / "data" / "glossary.yaml"
+
+
+@lru_cache(maxsize=1)
+def glossary() -> list[dict]:
+    if not GLOSSARY_PATH.exists():
+        return []
+    return yaml.safe_load(GLOSSARY_PATH.read_text(encoding="utf-8")) or []
+
+
+def _matches(entry: dict, c: dict) -> bool:
+    ref = entry["cite"]
+    if c["source_type"] != "law" or c["pcode"] != ref["pcode"] or c["article_no"] != str(ref["article"]):
+        return False
+    return not ref.get("paragraph") or (c["paragraph"] or 1) == ref["paragraph"]
+
+
+def glossary_note(c: dict) -> str:
+    return "；".join(e["text"] for e in glossary() if _matches(e, c))
+
+
+def add_definitions(hits: list[Hit], q: str, as_of: date, limit: int = 2) -> list[Hit]:
+    """問題提到「機車」「腳踏車」等用詞時，帶入定義條文，避免模型以為資料沒寫到。"""
+    have = {h.chunk["id"] for h in hits}
+    out = list(hits)
+    added = 0
+    for e in glossary():
+        if added >= limit or not any(t in q for t in e.get("triggers") or []):
+            continue
+        ref = e["cite"]
+        for c in INDEX.current(ref["pcode"], str(ref["article"]), as_of, ref.get("paragraph")):
+            if c["id"] not in have:
+                have.add(c["id"])
+                out.append(Hit(c, 0.0, 0.0, 0.0, False))
+                added += 1
+    return out
+
+
 def format_sources(hits: list[Hit], as_of: date) -> str:
     out = []
     for i, h in enumerate(hits, start=1):
@@ -48,7 +90,10 @@ def format_sources(hits: list[Hit], as_of: date) -> str:
             issues = sop.issues_for_step(c["sop_id"], c["step_id"])
             if issues:
                 head += "｜⚠ SOP 與現行法規不一致：" + "；".join(i["explanation"] for i in issues)
-        out.append(head + "\n" + c.get("annotated", c["text"]))
+        body = c.get("annotated", c["text"])
+        if note := glossary_note(c):
+            body += f"\n〔說明：{note}〕"
+        out.append(head + "\n" + body)
     return "\n\n".join(out)
 
 
@@ -136,7 +181,7 @@ def verify(answer: str, hits: list[Hit], question: str = "") -> dict:
         pool = set(q_values)
         for i in ids:
             c = hits[i - 1].chunk
-            pool |= values(c["text"])
+            pool |= values(c["text"] + glossary_note(c))  # 法規室說明的數字（如 0.17）也算有據
             if c["source_type"] == "sop":  # SOP 步驟：連同其法源條文與複核結果一起比對
                 for iss in sop.issues_for_step(c["sop_id"], c["step_id"]):
                     pool |= values(iss.get("law_text", "") + iss.get("explanation", ""))
@@ -179,6 +224,7 @@ async def ask_stream(q: str, as_of: date, domain: str | None, history: list[dict
     hits = INDEX.search(search_q, as_of=as_of, domain=domain)
     hits = add_main_paragraphs(hits, as_of)
     hits = expand_with_sop_links(hits, as_of)
+    hits = add_definitions(hits, q, as_of)
     pend = pending_hits(search_q, as_of, domain)
     have = {h.chunk["id"] for h in hits}
     hits += [Hit(c, 0.0, 0.0, 0.0, False) for c in pend[:3] if c["id"] not in have]
@@ -212,14 +258,17 @@ async def ask_stream(q: str, as_of: date, domain: str | None, history: list[dict
 
     answer = ""
     t_first = None
-    async for kind, text in llm.stream(messages, max_tokens=8192, temperature=0.1):
-        if kind == "thinking":
-            yield {"type": "thinking"}
-            continue
-        if t_first is None:
-            t_first = time.perf_counter() - t0
-        answer += text
-        yield {"type": "token", "text": text}
+    for _attempt in range(2):  # 服務忙碌時偶爾回空答案：重試一次
+        async for kind, text in llm.stream(messages, max_tokens=8192, temperature=0.1):
+            if kind == "thinking":
+                yield {"type": "thinking"}
+                continue
+            if t_first is None:
+                t_first = time.perf_counter() - t0
+            answer += text
+            yield {"type": "token", "text": text}
+        if answer.strip():
+            break
     answer = normalize_cites(answer)
     if not answer.strip():
         raise RuntimeError("模型沒有產生答案（可能是推理過長或服務忙碌），請再試一次。")

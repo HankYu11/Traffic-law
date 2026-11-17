@@ -245,3 +245,27 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--navy); }
 .gate-card { width: min(380px, 100%); padding: 28px; text-align: center; }
 .brand-dark { font-weight: 800; font-size: 20px; color: var(--navy); }
+
+/* ---------- 手機版 ---------- */
+@media (max-width: 760px) {
+  .topbar { height: auto; flex-wrap: wrap; gap: 6px 12px; padding: 8px 12px; }
+  .brand { font-size: 15px; }
+  .topbar .spacer { display: none; }
+  .nav { order: 3; width: 100%; overflow-x: auto; }
+  .nav button { white-space: nowrap; padding: 6px 10px; font-size: 14px; }
+  .asof { margin-left: auto; font-size: 12px; }
+  .asof input { padding: 2px 4px; font-size: 12px; }
+  .domainbar { overflow-x: auto; padding: 0 8px; }
+  .domainbar button { white-space: nowrap; padding: 10px 12px; }
+  .domainbar .desc { display: none; }
+  .page { padding: 12px; }
+  .suggest { grid-template-columns: 1fr; }
+  .sources { position: static; max-height: none; }
+  .sop-layout .card[style] { position: static !important; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tbl { display: block; overflow-x: auto; }
+  .versions.two { grid-template-columns: 1fr; }
+  .compare { grid-template-columns: 1fr; }
+  .msg-q { max-width: 92%; }
+  .meta-row { gap: 8px; }
+}

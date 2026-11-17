@@ -44,13 +44,10 @@ JUDGE = """你是警察法規考試的閱卷老師。請依「答案要點」判
 
 
 async def judge(q, points, a):
-    saved = config.LLM_MODEL
-    config.LLM_MODEL = JUDGE_MODEL
-    try:
-        raw = await llm.complete([{"role": "user", "content": JUDGE.format(
-            q=q, points="\n".join(f"- {p}" for p in points), a=a or "（無回答）")}], max_tokens=8192, temperature=0)
-    finally:
-        config.LLM_MODEL = saved
+    # 評分模型以參數指定，不可改全域設定（並行時會汙染回答模型）
+    raw = await llm.complete([{"role": "user", "content": JUDGE.format(
+        q=q, points="\n".join(f"- {p}" for p in points), a=a or "（無回答）")}], max_tokens=8192, temperature=0,
+        model=JUDGE_MODEL)
     m = re.search(r"\{.*\}", raw, re.S)
     try:
         return json.loads(m.group(0)) if m else {"correct": False, "reason": "評分失敗"}

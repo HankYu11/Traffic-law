@@ -20,9 +20,9 @@ log = logging.getLogger("llm")
 THOUGHT_RE = re.compile(r"<thought>.*?</thought>", re.S)
 
 
-def _payload(messages, max_tokens, stream, temperature):
+def _payload(messages, max_tokens, stream, temperature, model=None):
     return {
-        "model": config.LLM_MODEL,
+        "model": model or config.LLM_MODEL,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -45,11 +45,11 @@ def _backoff(attempt: int, r: httpx.Response | None = None) -> float:
     return min(2 ** attempt * 2, 60)  # 2, 4, 8, 16, 32, 60 秒
 
 
-async def complete(messages, max_tokens=4096, temperature=0.1) -> str:
+async def complete(messages, max_tokens=4096, temperature=0.1, model: str | None = None) -> str:
     async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as c:
         for attempt in range(MAX_RETRIES + 1):
             r = await c.post(f"{config.LLM_BASE_URL}/chat/completions", headers=_headers(),
-                             json=_payload(messages, max_tokens, False, temperature))
+                             json=_payload(messages, max_tokens, False, temperature, model))
             if r.status_code in RETRY_STATUS and attempt < MAX_RETRIES:
                 log.warning("LLM %s，第 %d 次重試（等待 %.0f 秒）", r.status_code, attempt + 1, _backoff(attempt, r))
                 await asyncio.sleep(_backoff(attempt, r))

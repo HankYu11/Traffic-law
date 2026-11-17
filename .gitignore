@@ -1,0 +1,12 @@
+.venv/
+node_modules/
+frontend/dist/
+models/
+scratch/
+data/raw/*.json
+data/raw/*.zip
+data/raw/*.html
+data/app.db
+__pycache__/
+*.pyc
+.env

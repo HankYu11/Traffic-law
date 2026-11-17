@@ -1,0 +1,119 @@
+{
+ "documents": [
+  {
+   "pcode": "K0040012",
+   "name": "道路交通管理處罰條例",
+   "level": "法律",
+   "modified": "2026-08-17",
+   "domains": [
+    "traffic",
+    "dui"
+   ],
+   "chunks": 391,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "K0040013",
+   "name": "道路交通安全規則",
+   "level": "命令",
+   "modified": "2026-11-06",
+   "domains": [
+    "traffic"
+   ],
+   "chunks": 404,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "D0080029",
+   "name": "違反道路交通管理事件統一裁罰基準及處理細則",
+   "level": "命令",
+   "modified": "2026-10-30",
+   "domains": [
+    "traffic",
+    "dui"
+   ],
+   "chunks": 183,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "D0080090",
+   "name": "道路交通事故處理辦法",
+   "level": "命令",
+   "modified": "2024-02-17",
+   "domains": [
+    "traffic"
+   ],
+   "chunks": 31,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "K0040042",
+   "name": "道路交通違規車輛移置保管及處理辦法",
+   "level": "命令",
+   "modified": "2006-07-05",
+   "domains": [
+    "traffic",
+    "dui"
+   ],
+   "chunks": 21,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "K0040075",
+   "name": "酒駕毒駕防制教育及酒癮毒品戒癮治療實施管理辦法",
+   "level": "命令",
+   "modified": "2026-10-30",
+   "domains": [
+    "dui"
+   ],
+   "chunks": 23,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "D0080145",
+   "name": "警察職權行使法",
+   "level": "法律",
+   "modified": "2011-04-27",
+   "domains": [
+    "traffic",
+    "dui"
+   ],
+   "chunks": 74,
+   "source": "全國法規資料庫 Open API",
+   "partial": false
+  },
+  {
+   "pcode": "C0000001",
+   "name": "中華民國刑法",
+   "level": "法律",
+   "modified": "2026-07-22",
+   "domains": [
+    "dui"
+   ],
+   "chunks": 5,
+   "source": "全國法規資料庫 Open API",
+   "partial": true
+  },
+  {
+   "pcode": "C0010001",
+   "name": "刑事訴訟法",
+   "level": "法律",
+   "modified": "2026-05-13",
+   "domains": [
+    "dui"
+   ],
+   "chunks": 19,
+   "source": "全國法規資料庫 Open API",
+   "partial": true
+  }
+ ],
+ "sop_chunks": 15,
+ "total_chunks": 1166,
+ "dump_updated": "2026/11/6 上午 12:00:00"
+}

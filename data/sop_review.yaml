@@ -1,0 +1,30 @@
+# 法規室複核紀錄（人工）：對 AI 比對結果逐筆「確認／修正／排除」。
+# match：比對 AI 結果的 sop_text 或 explanation 中的關鍵字。
+# 示範情境：AI 正確抓到 SOP 的拒測罰鍰已過時，但把應適用的金額講錯（誤用毒品拒測的 27 萬元），由法規室修正說明。
+reviews:
+  - sop: dui
+    step_id: refuse
+    match: 罰鍰
+    decision: corrected
+    reviewer: 法制科（示範）
+    reviewed_at: "2026-11-17"
+    law_cite: 違反道路交通管理事件統一裁罰基準及處理細則第19條之2第5項；道路交通管理處罰條例第35條第4項
+    law_text: 汽車駕駛人拒絕接受酒精濃度測試檢定者，處新臺幣十八萬元罰鍰，吊銷駕駛執照及吊扣該車輛牌照二年
+    explanation: SOP 所列拒測罰鍰「九萬元」已過時。現行規定拒絕酒精濃度測試檢定處新臺幣十八萬元，並吊扣車輛牌照二年（二十七萬元係拒絕毒品稽查或測試檢定之罰鍰，AI 初判誤用）。
+    ai_note: AI 初判方向正確（金額已過時），但引用金額錯誤，經人工修正。
+
+  - sop: dui
+    step_id: result
+    match: "0.18"
+    decision: rejected
+    reviewer: 法制科（示範）
+    reviewed_at: "2026-11-17"
+    explanation: 酒精測試器顯示至小數點後二位，「未滿 0.18」即「0.17 以下」，與細則第 12 條「超過標準值未逾 0.02」一致，非實質不一致。
+
+  - sop: dui
+    step_id: result
+    match: 合格駕駛人
+    decision: confirmed
+    reviewer: 法制科（示範）
+    reviewed_at: "2026-11-17"
+    explanation: 現行道交條例第 35 條第 1 項規定酒駕「均當場移置保管該汽機車」，SOP 中「委託合格駕駛人駛離」選項應刪除或改依現行規定辦理。

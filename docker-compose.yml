@@ -1,0 +1,50 @@
+# 兩種模式：
+#   開發／簡報：docker compose up app            （LLM 走 Gemini API 上的 Gemma 4，需要 GEMINI_API_KEY）
+#   警局內網：  docker compose --profile onprem up （LLM 走本機 H200 上的 vLLM，完全不對外連線）
+services:
+  app:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      LLM_API_KEY: ${LLM_API_KEY:-${GEMINI_API_KEY:-}}
+      LLM_MODEL: ${LLM_MODEL:-gemma-4-26b-a4b-it}
+      DEMO_TODAY: ${DEMO_TODAY:-}
+      DB_PATH: /app/state/app.db
+    volumes:
+      - state:/app/state
+
+  # 地端推論：同一組開放權重，跑在警局 H200 上（模型路徑請依實際下載位置調整）
+  vllm:
+    profiles: ["onprem"]
+    image: vllm/vllm-openai:latest
+    command: >
+      --model /models/gemma-4-26b-a4b-it
+      --served-model-name gemma-4-26b-a4b-it
+      --max-model-len 32768
+      --gpu-memory-utilization 0.85
+      --enable-prefix-caching
+    volumes:
+      - /srv/models:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }]
+    ports: ["8001:8000"]
+
+  app-onprem:
+    profiles: ["onprem"]
+    build: .
+    ports: ["8000:8000"]
+    depends_on: [vllm]
+    environment:
+      LLM_BASE_URL: http://vllm:8000/v1
+      LLM_API_KEY: none
+      LLM_MODEL: gemma-4-26b-a4b-it
+      DB_PATH: /app/state/app.db
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - state:/app/state
+
+volumes:
+  state:

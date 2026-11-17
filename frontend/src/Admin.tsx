@@ -82,7 +82,7 @@ export default function Admin({ meta, onOpenArticle }: { meta: Meta; onOpenArtic
       </div>
       {tab === 'eval' && <EvalTab />}
       {tab === 'kb' && <KbTab meta={meta} onOpenArticle={onOpenArticle} />}
-      {tab === 'stats' && <StatsTab />}
+      {tab === 'stats' && <StatsTab meta={meta} />}
       {tab === 'history' && <HistoryTab />}
     </div>
   )
@@ -329,7 +329,7 @@ function KbTab({ meta, onOpenArticle }: { meta: Meta & { amendments?: Amendment[
   )
 }
 
-function StatsTab() {
+function StatsTab({ meta }: { meta: Meta }) {
   const [s, setS] = useState<Stats | null>(null)
   useEffect(() => {
     getJSON<Stats>('/api/stats').then(setS)
@@ -372,6 +372,13 @@ function StatsTab() {
             <div className="muted" style={{ marginTop: 6 }}>
               「轉請法制單位確認」即需求書所稱「人工詢問次數」，可用來追蹤導入後減少的人工詢問量。
             </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-h">今日 AI 呼叫額度</div>
+          <div className="card-b">
+            {meta.usage.today} / {meta.usage.limit || '不限'} 次・快取答案 {meta.usage.cached_answers} 筆
+            <div className="muted" style={{ marginTop: 6 }}>公開示範網址設有每日上限；重複的問題直接重播快取答案，不再呼叫模型。</div>
           </div>
         </div>
         <div className="card">

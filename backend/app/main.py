@@ -4,12 +4,15 @@ import json
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import asyncio
+import time
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import answer, config, db, sop
+from . import answer, config, db, guard, sop
 from .index import INDEX, status
 
 app = FastAPI(title="警政法規知識庫 Chatbot（實證 Demo）")
@@ -23,6 +26,7 @@ DOMAINS = [
 @app.on_event("startup")
 def startup():
     db.init()
+    guard.init()
     INDEX.load()
 
 
@@ -46,33 +50,76 @@ def meta():
     amendments = json.loads(json.dumps(cy.get("amendments", []), default=str))
     return {"today": config.TODAY.isoformat(), "domains": DOMAINS, "corpus": m, "amendments": amendments,
             "llm": {"model": config.LLM_MODEL, "endpoint": config.LLM_BASE_URL.split("/v1")[0]},
-            "embedding": config.EMBED_MODEL, "embed_stats": getattr(INDEX, "embed_stats", {})}
+            "embedding": config.EMBED_MODEL, "embed_stats": getattr(INDEX, "embed_stats", {}),
+            "access_required": bool(guard.ACCESS_CODE), "usage": guard.usage()}
 
 
-@app.post("/api/ask")
+@app.post("/api/auth/check", dependencies=[Depends(guard.check_code)])
+def auth_check():
+    return {"ok": True}
+
+
+@app.post("/api/ask", dependencies=[Depends(guard.check_code)])
 async def ask(req: AskReq):
+    guard.check_question(req.question)
     as_of = parse_date(req.as_of)
+    key = None if req.history else guard.cache_key(req.question, req.domain, as_of.isoformat(), config.LLM_MODEL)
+    cached = guard.cache_get(key) if key else None
+    if not cached:
+        guard.take_quota()
+
+    async def replay():
+        t0 = time.perf_counter()
+        sources = []
+        for ev in cached:
+            ev = dict(ev)
+            if ev["type"] == "sources":
+                sources = ev["sources"]
+            elif ev["type"] == "token":
+                text = ev["text"]
+                for i in range(0, len(text), 24):  # 保留串流的觀感
+                    yield answer.dumps({"type": "token", "text": text[i:i + 24]})
+                    await asyncio.sleep(0.008)
+                continue
+            elif ev["type"] == "done":
+                ev["cached"] = True
+                ev["timing"] = dict(ev["timing"], total_ms=round((time.perf_counter() - t0) * 1000))
+                ev["query_id"] = db.log_query(req.question, req.domain, as_of.isoformat(), "rag", ev, sources)
+            yield answer.dumps(ev)
 
     async def gen():
-        sources = []
+        sources, events, answer_text = [], [], ""
         try:
             async for ev in answer.ask_stream(req.question, as_of, req.domain, req.history):
                 if ev["type"] == "sources":
                     sources = ev["sources"]
-                if ev["type"] == "done":
+                    events.append(ev)
+                elif ev["type"] == "token":
+                    answer_text += ev["text"]
+                elif ev["type"] == "done":
                     ev["query_id"] = db.log_query(req.question, req.domain, as_of.isoformat(), "rag", ev, sources)
+                    if key:
+                        guard.cache_put(key, events + [{"type": "token", "text": answer_text},
+                                                       {k: v for k, v in ev.items() if k != "query_id"}])
                 yield answer.dumps(ev)
         except Exception as e:  # noqa: BLE001
             yield answer.dumps({"type": "error", "message": str(e)[:300]})
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
+    return StreamingResponse(replay() if cached else gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-@app.post("/api/baseline")
+@app.post("/api/baseline", dependencies=[Depends(guard.check_code)])
 async def baseline(req: AskReq):
     """對照組：同一個模型、不給資料。用來說明為什麼需要 RAG＋引用驗證。"""
+    guard.check_question(req.question)
+    key = "baseline:" + guard.cache_key(req.question, None, "", config.LLM_MODEL)
+    hit = guard.cache_get(key)
+    if hit:
+        return {"answer": hit[0]["answer"], "cached": True}
+    guard.take_quota()
     text = await answer.ask_baseline(req.question)
+    guard.cache_put(key, [{"answer": text}])
     return {"answer": text}
 
 

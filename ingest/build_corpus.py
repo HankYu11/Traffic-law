@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
-from lawtext import article_label, norm_article_no, split_paragraphs  # noqa: E402
+from lawtext import annotate_refs, article_label, norm_article_no, split_paragraphs  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
@@ -96,6 +96,8 @@ def emit(base, content, version_label, default_from, effective_to, para_from, pa
             "paragraph": i if multi else None,
             "cite": base["law_name"] + base["article_label"] + (f"第{i}項" if multi else ""),
             "text": p,
+            "annotated": annotate_refs(paras, i, items_only=True) if multi else p,  # 給模型看：只展開精確的「款」參照
+            "index_text": annotate_refs(paras, i) if multi else p,  # 給檢索用：連「項」參照一起展開
             "article_text": full,
             "version_label": version_label,
             "effective_from": str(eff_from) if eff_from else None,
@@ -129,6 +131,8 @@ def sop_chunks():
                 "paragraph": None,
                 "cite": f"{sop['title']}「{st['title']}」",
                 "text": "\n".join(lines),
+                "annotated": "\n".join(lines),
+                "index_text": "\n".join(lines),
                 "article_text": "\n".join(lines),
                 "version_label": sop.get("version_label", ""),
                 "effective_from": None,

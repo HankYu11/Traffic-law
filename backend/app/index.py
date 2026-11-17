@@ -142,7 +142,7 @@ class Index:
         df = Counter()
         tfs = []
         for c in self.chunks:
-            toks = tokens(c["law_name"] + c["article_label"] + c["chapter"] + c["text"])
+            toks = tokens(c["law_name"] + c["article_label"] + c["chapter"] + c.get("index_text", c["text"]))
             tf = Counter(toks)
             tfs.append((tf, len(toks)))
             df.update(tf.keys())
@@ -175,7 +175,7 @@ class Index:
 
     @staticmethod
     def _doc_text(c: dict) -> str:
-        return f"title: {c['law_name']} {c['article_label']} | text: {c['text']}"
+        return f"title: {c['law_name']} {c['article_label']} | text: {c.get('index_text', c['text'])}"
 
     def _load_or_build_vectors(self):
         """增量更新：只對內容有變動的片段重新計算向量。"""
@@ -191,7 +191,8 @@ class Index:
             new = list(self.embedder.embed([self._doc_text(self.chunks[i]) for i in missing], batch_size=16))
             for i, v in zip(missing, new):
                 cached[keys[i]] = np.asarray(v, dtype=np.float32)
-            np.savez(cache_f, keys=np.array(list(cached.keys())), vecs=np.stack(list(cached.values())))
+            cur = {k: cached[k] for k in keys}  # 只保留目前片段的向量，避免快取越長越大
+            np.savez(cache_f, keys=np.array(list(cur.keys())), vecs=np.stack(list(cur.values())))
         v = np.stack([cached[k] for k in keys])
         self.vecs = v / np.linalg.norm(v, axis=1, keepdims=True)
         self.embed_stats = {"total": len(keys), "recomputed": len(missing)}

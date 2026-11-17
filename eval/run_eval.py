@@ -2,7 +2,7 @@
 
 用法：python eval/run_eval.py [--limit N] [--no-baseline]
 輸出：eval/reports/latest.json、eval/reports/<timestamp>.json、eval/reports/latest.md
-評分模型與回答模型分開（預設 gemini-2.5-flash），避免自己改自己的考卷。
+評分模型與回答模型分開（預設 gemma-4-31b-it；回答用 gemma-4-26b-a4b-it），避免自己改自己的考卷。
 """
 import argparse
 import asyncio
@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app import answer, config, llm  # noqa: E402
 from app.index import INDEX  # noqa: E402
 
-JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gemini-2.5-flash")
+JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gemma-4-31b-it")
 
 JUDGE = """你是警察法規考試的閱卷老師。請依「答案要點」判斷考生回答是否正確。
 

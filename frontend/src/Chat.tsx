@@ -15,6 +15,7 @@ interface Turn {
   refused?: boolean
   timing?: { retrieval_ms: number; first_token_ms?: number; total_ms: number }
   queryId?: number
+  cached?: boolean
   feedback?: number
   asOf: string
   baseline?: string | 'loading'
@@ -73,11 +74,11 @@ export default function Chat({
         else if (e.type === 'thinking') update(idx, (t) => (t.phase === 'thinking' ? {} : { phase: 'thinking' }))
         else if (e.type === 'token') update(idx, (t) => ({ answer: t.answer + e.text, phase: 'writing' }))
         else if (e.type === 'done')
-          update(idx, { answer: e.answer, verification: e.verification, refused: e.refused, timing: e.timing, queryId: e.query_id, phase: 'done' })
+          update(idx, { answer: e.answer, verification: e.verification, refused: e.refused, timing: e.timing, queryId: e.query_id, cached: e.cached, phase: 'done' })
         else if (e.type === 'error') update(idx, { phase: 'error', error: e.message })
       })
     } catch (err) {
-      update(idx, { phase: 'error', error: String(err) })
+      update(idx, { phase: 'error', error: err instanceof Error ? err.message : String(err) })
     } finally {
       setBusy(false)
     }
@@ -85,8 +86,12 @@ export default function Chat({
 
   async function runBaseline(idx: number) {
     update(idx, { baseline: 'loading' })
-    const r = await postJSON<{ answer: string }>('/api/baseline', { question: turns[idx].q })
-    update(idx, { baseline: r.answer })
+    try {
+      const r = await postJSON<{ answer: string }>('/api/baseline', { question: turns[idx].q })
+      update(idx, { baseline: r.answer })
+    } catch (err) {
+      update(idx, { baseline: `（無法取得：${err instanceof Error ? err.message : String(err)}）` })
+    }
   }
 
   async function feedback(idx: number, rating: number, needsHuman = false) {
@@ -159,6 +164,7 @@ export default function Chat({
                       檢索 {t.timing?.retrieval_ms} ms・總計 {((t.timing?.total_ms ?? 0) / 1000).toFixed(1)} 秒
                     </span>
                     <span>基準日 {t.asOf}</span>
+                    {t.cached && <span title="同一題先前已回答過，直接重播，不再呼叫模型">快取答案</span>}
                     {t.expansions && t.expansions.length > 0 && (
                       <span title="員警口語 → 法條用語對照表（法規室可維護）">查詢擴充：{t.expansions.slice(0, 4).join('、')}</span>
                     )}

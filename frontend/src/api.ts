@@ -71,6 +71,8 @@ export interface Meta {
   llm: { model: string; endpoint: string }
   embedding: string
   embed_stats: { total: number; recomputed: number }
+  access_required: boolean
+  usage: { today: number; limit: number; cached_answers: number }
 }
 
 export type AskEvent =
@@ -84,8 +86,51 @@ export type AskEvent =
       verification: Verification
       timing: { retrieval_ms: number; first_token_ms?: number; total_ms: number }
       query_id: number
+      cached?: boolean
     }
   | { type: 'error'; message: string }
+
+// ---------- 存取碼（公開示範網址用） ----------
+const CODE_KEY = 'police-demo-access-code'
+let accessCode = ''
+try {
+  accessCode = localStorage.getItem(CODE_KEY) ?? ''
+} catch {
+  /* 私密視窗等情況：不記住存取碼 */
+}
+export function getAccessCode() {
+  return accessCode
+}
+export function setAccessCode(code: string) {
+  accessCode = code
+  try {
+    if (code) localStorage.setItem(CODE_KEY, code)
+    else localStorage.removeItem(CODE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+function authHeaders(): Record<string, string> {
+  return accessCode ? { 'X-Access-Code': accessCode } : {}
+}
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+async function errorFrom(r: Response): Promise<ApiError> {
+  let msg = `${r.status}`
+  try {
+    const j = await r.json()
+    msg = j.detail ?? msg
+  } catch {
+    /* ignore */
+  }
+  if (r.status === 401) window.dispatchEvent(new Event('access-denied'))
+  return new ApiError(r.status, msg)
+}
 
 export async function getJSON<T>(url: string): Promise<T> {
   const r = await fetch(url)
@@ -94,8 +139,8 @@ export async function getJSON<T>(url: string): Promise<T> {
 }
 
 export async function postJSON<T>(url: string, body: unknown): Promise<T> {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-  if (!r.ok) throw new Error(`${r.status} ${url}`)
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) })
+  if (!r.ok) throw await errorFrom(r)
   return r.json()
 }
 
@@ -103,8 +148,8 @@ export async function askStream(
   body: { question: string; domain: string | null; as_of: string; history: { role: string; content: string }[] },
   onEvent: (e: AskEvent) => void,
 ) {
-  const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-  if (!r.ok || !r.body) throw new Error(`ask failed: ${r.status}`)
+  const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) })
+  if (!r.ok || !r.body) throw await errorFrom(r)
   const reader = r.body.getReader()
   const dec = new TextDecoder()
   let buf = ''

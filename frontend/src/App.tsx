@@ -4,7 +4,7 @@ import ArticleModal from './ArticleModal'
 import Chat from './Chat'
 import QuickSearch from './QuickSearch'
 import SopView from './SopView'
-import { getJSON, type Meta } from './api'
+import { getAccessCode, getJSON, postJSON, setAccessCode, type Meta } from './api'
 
 type Page = 'chat' | 'search' | 'sop' | 'admin'
 
@@ -16,14 +16,25 @@ export default function App() {
   const [article, setArticle] = useState<{ pcode: string; article_no: string; paragraph?: number | null } | null>(null)
   const [sopFocus, setSopFocus] = useState<{ id: string; step?: string }>({ id: 'dui' })
 
+  const [locked, setLocked] = useState(false)
+
   useEffect(() => {
     getJSON<Meta>('/api/meta').then((m) => {
       setMeta(m)
       setAsOf(m.today)
+      if (m.access_required) {
+        // 已存的存取碼先驗證一次
+        if (!getAccessCode()) setLocked(true)
+        else postJSON('/api/auth/check', {}).catch(() => setLocked(true))
+      }
     })
+    const onDenied = () => setLocked(true)
+    window.addEventListener('access-denied', onDenied)
+    return () => window.removeEventListener('access-denied', onDenied)
   }, [])
 
   if (!meta) return <div className="page muted">載入中…</div>
+  if (locked) return <AccessGate onOk={() => setLocked(false)} />
 
   const openSop = (id: string, step?: string) => {
     setSopFocus({ id, step })
@@ -98,5 +109,39 @@ export default function App() {
 
       {article && <ArticleModal pcode={article.pcode} articleNo={article.article_no} focusParagraph={article.paragraph} asOf={asOf} onClose={() => setArticle(null)} />}
     </>
+  )
+}
+
+function AccessGate({ onOk }: { onOk: () => void }) {
+  const [code, setCode] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setErr('')
+    setAccessCode(code.trim())
+    try {
+      await postJSON('/api/auth/check', {})
+      onOk()
+    } catch {
+      setAccessCode('')
+      setErr('存取碼不正確')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="gate">
+      <form className="card gate-card" onSubmit={submit}>
+        <div className="brand-dark">🛡️ 警政法規智慧助理</div>
+        <div className="muted" style={{ margin: '6px 0 16px' }}>實證 Demo・請輸入存取碼</div>
+        <input autoFocus value={code} onChange={(e) => setCode(e.target.value)} placeholder="存取碼" className="qs-input" />
+        {err && <div style={{ color: 'var(--bad)', marginTop: 8 }}>{err}</div>}
+        <button className="btn primary" style={{ width: '100%', marginTop: 14, padding: 12 }} disabled={busy || !code.trim()}>
+          進入
+        </button>
+      </form>
+    </div>
   )
 }

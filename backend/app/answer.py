@@ -10,29 +10,26 @@ from . import config, llm, sop
 from .index import INDEX, Hit, expand_query, status
 from .numbers import claims, values
 
-SYSTEM = """你是臺北市政府警察局的「法規與作業程序助理」，服務對象是執勤員警。
+SYSTEM = """你是臺北市政府警察局的法規與作業程序助理，服務執勤員警。規則：
+1. 只根據 <資料> 回答；資料沒寫的法條、金額、期間、程序不得補充。資料不足就回答「查無足夠依據，建議洽詢法制單位或業務主管。」
+2. 每句事實後標出處，如 [S2]；多個出處寫成 [S1][S3]。數字必須與條文一致。
+3. 只回答問題問的情形（酒精≠毒品、汽車≠機車≠慢車、初犯≠再犯），不要列出其他情形的罰則。條文中「〔〕」是系統展開的參照說明，用來判斷適用情形，不是原文。
+4. 處罰題要列齊該情形的所有處分（罰鍰、吊扣／吊銷駕照、移置保管、扣繳／吊扣牌照、移送法辦）；程序題要列齊要件與例外。
+5. 標示「尚未施行」的是新規定，以「現行有效」版本回答，並在注意事項說明施行日。
+6. SOP 與現行條文不一致時以條文為準，並提醒「SOP 內容待更新」。
+7. 繁體中文，精簡條列。
 
-規則（務必遵守）：
-1. 只能根據 <資料> 內的條文與作業程序回答。資料沒有寫的法條、金額、期間、程序，一律不得自行補充。
-2. 每一句陳述事實的句子後面都要標註出處編號，例如 [S2]；同一句有多個出處寫成 [S1][S3]。
-3. 金額、期間、濃度等數字必須與條文原文一致，不得換算或推估。
-4. 若資料不足以回答，直接回答「查無足夠依據，建議洽詢法制單位或業務主管。」不要猜測。
-5. 若資料標示「尚未施行」或「已失效」，回答時必須明確提醒該規定的施行狀態。
-6. 若作業程序（SOP）內容與現行條文不一致，以現行條文為準，並提醒「SOP 內容待更新」。
-7. 涉及處罰時，結論要完整列出條文規定的所有處分（罰鍰、吊扣／吊銷駕照、移置保管、吊扣牌照、移送法辦等），不可只寫罰鍰。
-8. 使用繁體中文，語氣精簡、條列，讓外勤員警一眼看懂。
-
-輸出格式（沒有內容的段落可省略）：
+格式（沒有內容的段落省略）：
 ### 結論
-（一到三句話直接回答問題）
+（第一句直接回答：適用哪一條、罰多少／怎麼做）
 ### 法律依據
-- （條文名稱與條號，說明重點）[S#]
+- 條文與重點 [S#]
 ### 處理步驟
-1. （依作業程序列出步驟）[S#]
+1. 步驟 [S#]
 ### 應備文件
-- （表單名稱）[S#]
+- 表單 [S#]
 ### 注意事項
-- （易錯點、權利告知、施行狀態提醒）[S#]
+- 易錯點、施行狀態 [S#]
 """
 
 
@@ -51,7 +48,7 @@ def format_sources(hits: list[Hit], as_of: date) -> str:
             issues = sop.issues_for_step(c["sop_id"], c["step_id"])
             if issues:
                 head += "｜⚠ SOP 與現行法規不一致：" + "；".join(i["explanation"] for i in issues)
-        out.append(head + "\n" + c["text"])
+        out.append(head + "\n" + c.get("annotated", c["text"]))
     return "\n\n".join(out)
 
 
@@ -71,6 +68,15 @@ def should_refuse(hits: list[Hit]) -> bool:
 
 
 CITE_RE = re.compile(r"\[S(\d+)\]")
+MULTI_CITE_RE = re.compile(r"[\[【]\s*(S\d+(?:\s*[,，、]\s*S?\d+)+)\s*[\]】]")
+
+
+def normalize_cites(text: str) -> str:
+    """把「[S1, S8]」「[S1、3]」統一成「[S1][S8]」。"""
+    def repl(m):
+        ids = re.findall(r"\d+", m.group(1))
+        return "".join(f"[S{i}]" for i in ids)
+    return MULTI_CITE_RE.sub(repl, text)
 
 
 def expand_with_sop_links(hits: list[Hit], as_of: date, limit: int = 12) -> list[Hit]:
@@ -87,6 +93,24 @@ def expand_with_sop_links(hits: list[Hit], as_of: date, limit: int = 12) -> list
                 if lc["id"] not in have and len(out) < limit:
                     have.add(lc["id"])
                     out.append(Hit(lc, 0.0, 0.0, 0.0, False))
+    return out
+
+
+def add_main_paragraphs(hits: list[Hit], as_of: date, limit: int = 3) -> list[Hit]:
+    """主項補全：取到某條的後段項次時，一併帶入該條第 1 項（多數後段項次都是「依第一項…」）。"""
+    have = {h.chunk["id"] for h in hits}
+    added = 0
+    out = list(hits)
+    for h in hits:
+        c = h.chunk
+        if c["source_type"] != "law" or not c["paragraph"] or c["paragraph"] == 1 or added >= limit:
+            continue
+        for mc in INDEX.current(c["pcode"], c["article_no"], as_of, 1):
+            if mc["id"] not in have:
+                have.add(mc["id"])
+                # 插在該項前面，讓模型先讀到主規定
+                out.insert(out.index(h), Hit(mc, h.score, h.dense, 0.0, False))
+                added += 1
     return out
 
 
@@ -153,6 +177,7 @@ async def ask_stream(q: str, as_of: date, domain: str | None, history: list[dict
         prev = [m["content"] for m in history if m.get("role") == "user"][-2:]
         search_q = " ".join(prev + [q])
     hits = INDEX.search(search_q, as_of=as_of, domain=domain)
+    hits = add_main_paragraphs(hits, as_of)
     hits = expand_with_sop_links(hits, as_of)
     pend = pending_hits(search_q, as_of, domain)
     have = {h.chunk["id"] for h in hits}
@@ -187,7 +212,7 @@ async def ask_stream(q: str, as_of: date, domain: str | None, history: list[dict
 
     answer = ""
     t_first = None
-    async for kind, text in llm.stream(messages):
+    async for kind, text in llm.stream(messages, max_tokens=8192, temperature=0.1):
         if kind == "thinking":
             yield {"type": "thinking"}
             continue
@@ -195,6 +220,9 @@ async def ask_stream(q: str, as_of: date, domain: str | None, history: list[dict
             t_first = time.perf_counter() - t0
         answer += text
         yield {"type": "token", "text": text}
+    answer = normalize_cites(answer)
+    if not answer.strip():
+        raise RuntimeError("模型沒有產生答案（可能是推理過長或服務忙碌），請再試一次。")
     v = verify(answer, hits, q)
     yield {"type": "done", "answer": answer, "refused": False, "verification": v,
            "timing": {"retrieval_ms": round(t_retr * 1000),

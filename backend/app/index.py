@@ -230,7 +230,8 @@ class Index:
         top = sorted(rrf.items(), key=lambda x: -x[1])[:k]
         return [Hit(self.chunks[i], s, float(dense[i]), float(bm[i]), bool(exact[i])) for i, s in top]
 
-    def quick_search(self, q: str, as_of: date, domain: str | None = None, k: int = 20) -> list[Hit]:
+    def quick_search(self, q: str, as_of: date, domain: str | None = None, k: int = 20,
+                     pcode: str | None = None) -> list[Hit]:
         """外勤快速查詢：不經 LLM，條號／關鍵字直接比對，毫秒級回應。"""
         bm = self.bm25(expand_query(q)[0])
         refs = set(article_refs(q))
@@ -240,6 +241,8 @@ class Index:
             if c["source_type"] != "law" or not in_force(c, as_of):
                 continue
             if domain and domain not in c["domains"]:
+                continue
+            if pcode and c["pcode"] != pcode:
                 continue
             ex = c["article_no"] in refs and (not named or c["law_name"] in named)
             s = bm[i] + (100 if ex else 0)

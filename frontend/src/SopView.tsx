@@ -65,7 +65,7 @@ export default function SopView({
 
   return (
     <div className="sop-layout">
-      <div className="card" style={{ position: 'sticky', top: 120 }}>
+      <div className="card sop-side">
         <div className="card-h">{sop.title}</div>
         <div className="card-b small">
           <div>版本：{sop.version_label}</div>

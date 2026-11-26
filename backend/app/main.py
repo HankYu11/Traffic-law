@@ -124,9 +124,9 @@ async def baseline(req: AskReq):
 
 
 @app.get("/api/search")
-def quick_search(q: str, domain: str | None = None, as_of: str | None = None):
+def quick_search(q: str, domain: str | None = None, as_of: str | None = None, pcode: str | None = None):
     d = parse_date(as_of)
-    hits = INDEX.quick_search(q, d, domain)
+    hits = INDEX.quick_search(q, d, domain, pcode=pcode)
     return {"results": [answer.hit_json(h, i, d) for i, h in enumerate(hits, start=1)]}
 
 

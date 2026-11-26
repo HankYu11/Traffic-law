@@ -23,6 +23,7 @@ REGION="${REGION:-asia-east1}"
 SERVICE="${SERVICE:-police-law-demo}"
 DAILY_LLM_LIMIT="${DAILY_LLM_LIMIT:-300}"
 DEMO_TODAY="${DEMO_TODAY:-2026-11-17}"
+LLM_MODEL="${LLM_MODEL:-gemma-4-26b-a4b-it}"  # 例：LLM_MODEL=gemini-3.5-flash-lite（回應較快，但非開放權重、按量計費）
 
 gcloud config set project "$PROJECT" >/dev/null
 echo "▶ 啟用必要服務…"
@@ -65,7 +66,7 @@ gcloud run deploy "$SERVICE" \
   --timeout 300 \
   --allow-unauthenticated \
   --set-secrets "LLM_API_KEY=gemini-api-key:latest,ACCESS_CODE=demo-access-code:latest" \
-  --set-env-vars "LLM_MODEL=gemma-4-26b-a4b-it,DEMO_TODAY=${DEMO_TODAY},DAILY_LLM_LIMIT=${DAILY_LLM_LIMIT},HF_HUB_OFFLINE=1,DB_PATH=/tmp/app.db"
+  --set-env-vars "LLM_MODEL=${LLM_MODEL},DEMO_TODAY=${DEMO_TODAY},DAILY_LLM_LIMIT=${DAILY_LLM_LIMIT},HF_HUB_OFFLINE=1,DB_PATH=/tmp/app.db"
 
 URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
 echo "▶ 部署完成：$URL"

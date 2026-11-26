@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getJSON, type Meta } from './api'
+import { fmtDate, getJSON, type Meta } from './api'
 
 interface Amendment {
   pcode: string
@@ -266,7 +266,7 @@ function KbTab({ meta, onOpenArticle }: { meta: Meta & { amendments?: Amendment[
           </tbody>
         </table>
         <div className="card-b small muted">
-          資料來源：法務部全國法規資料庫 Open API（資料更新 {meta.corpus.dump_updated}）。切片單位為「項」，每個片段帶有法規代碼、條號、項次、版本、施行日、失效日等
+          資料來源：法務部全國法規資料庫 Open API（資料更新 {fmtDate(meta.corpus.dump_updated)}）。切片單位為「項」，每個片段帶有法規代碼、條號、項次、版本、施行日、失效日等
           Metadata。共 {meta.corpus.total_chunks} 個片段。
         </div>
       </div>
@@ -407,7 +407,7 @@ function HistoryTab() {
       <div className="card-h">
         查詢紀錄
         <span style={{ flex: 1 }} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋相同情境…" style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 8px' }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋相同情境…" style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 8px', font: 'inherit', fontWeight: 400 }} />
       </div>
       <table className="tbl">
         <thead>
@@ -429,6 +429,13 @@ function HistoryTab() {
               <td className="num small">{(r.total_ms / 1000).toFixed(1)}s</td>
             </tr>
           ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 24 }}>
+                {q ? '沒有符合的查詢紀錄' : '尚無查詢紀錄。到「問答」頁提問後，紀錄會出現在這裡。'}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

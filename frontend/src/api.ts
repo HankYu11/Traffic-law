@@ -198,3 +198,9 @@ export function diffChars(a: string, b: string): { t: 'same' | 'add' | 'del'; s:
   if (j < m) push('add', b.slice(j))
   return out
 }
+
+/** 「2026/11/6 上午 12:00:00」或 ISO 字串 → 「2026-11-06」 */
+export function fmtDate(s: string): string {
+  const m = s?.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/)
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : s
+}

@@ -89,18 +89,20 @@ async def _raw_stream(c: httpx.AsyncClient, messages, max_tokens, temperature) -
             return
 
 
-THINK_TIMEOUT = float(__import__("os").getenv("THINK_TIMEOUT", "20"))
+THINK_TIMEOUT = float(__import__("os").getenv("THINK_TIMEOUT", "15"))
+THINK_RESTARTS = int(__import__("os").getenv("THINK_RESTARTS", "3"))
 
 
 async def stream(messages, max_tokens=4096, temperature=0.1) -> AsyncIterator[tuple[str, str]]:
     """產生 (kind, text)：kind = 'thinking'（推理中，僅回報進度）或 'token'（答案文字）。
 
     Gemini API 上的 Gemma 4 無法關閉推理，偶爾會推理很久（60 秒以上）。
-    推理超過 THINK_TIMEOUT 秒、尚未輸出答案時，取消並重新請求一次（重抽通常不會再長考）。
+    推理超過 THINK_TIMEOUT 秒、尚未輸出答案時，取消並重新請求（最多 THINK_RESTARTS 次；重抽通常不會再長考），
+    最後一次不設限。
     地端 vLLM 可直接關閉推理，不會有這個問題。
     """
     loop = asyncio.get_running_loop()
-    for attempt in range(2):
+    for attempt in range(THINK_RESTARTS + 1):
         buf = ""
         in_thought: bool | None = None  # None = 尚未判斷
         emitted = False
@@ -108,7 +110,7 @@ async def stream(messages, max_tokens=4096, temperature=0.1) -> AsyncIterator[tu
         restart = False
         async with httpx.AsyncClient(timeout=config.LLM_TIMEOUT) as c:
             async for delta in _raw_stream(c, messages, max_tokens, temperature):
-                if not emitted and attempt == 0 and loop.time() - t0 > THINK_TIMEOUT:
+                if not emitted and attempt < THINK_RESTARTS and loop.time() - t0 > THINK_TIMEOUT:
                     log.warning("推理超過 %.0f 秒，重新請求", THINK_TIMEOUT)
                     restart = True
                     break

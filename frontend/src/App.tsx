@@ -4,14 +4,13 @@ import ArticleModal from './ArticleModal'
 import Chat from './Chat'
 import QuickSearch from './QuickSearch'
 import SopView from './SopView'
-import { getAccessCode, getJSON, postJSON, setAccessCode, type Meta } from './api'
+import { fmtDate, getAccessCode, getJSON, postJSON, setAccessCode, type Meta } from './api'
 
 type Page = 'chat' | 'search' | 'sop' | 'admin'
 
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null)
   const [page, setPage] = useState<Page>('chat')
-  const [domain, setDomain] = useState<string | null>(null)
   const [asOf, setAsOf] = useState('')
   const [article, setArticle] = useState<{ pcode: string; article_no: string; paragraph?: number | null } | null>(null)
   const [sopFocus, setSopFocus] = useState<{ id: string; step?: string }>({ id: 'dui' })
@@ -40,7 +39,6 @@ export default function App() {
     setSopFocus({ id, step })
     setPage('sop')
   }
-  const domainInfo = meta.domains.find((d) => d.id === domain)
 
   return (
     <>
@@ -74,20 +72,6 @@ export default function App() {
         </div>
       </div>
 
-      {(page === 'chat' || page === 'search') && (
-        <div className="domainbar">
-          <button className={domain === null ? 'active' : ''} onClick={() => setDomain(null)}>
-            全部業務
-          </button>
-          {meta.domains.map((d) => (
-            <button key={d.id} className={domain === d.id ? 'active' : ''} onClick={() => setDomain(d.id)}>
-              {d.name}
-            </button>
-          ))}
-          <span className="desc">{domainInfo ? domainInfo.desc : '檢索所有已收錄的法規與作業程序'}</span>
-        </div>
-      )}
-
       <div className="page">
         {asOf !== meta.today && (
           <div className="notice warn">
@@ -95,13 +79,14 @@ export default function App() {
           </div>
         )}
         <div style={{ display: page === 'chat' ? 'block' : 'none' }}>
-          <Chat domain={domain} asOf={asOf} onOpenArticle={setArticle} onOpenSop={openSop} />
+          <Chat domain={null} asOf={asOf} onOpenArticle={setArticle} onOpenSop={openSop} />
         </div>
-        {page === 'search' && <QuickSearch domain={domain} asOf={asOf} onOpenArticle={setArticle} />}
+        {page === 'search' && <QuickSearch laws={meta.corpus.documents} asOf={asOf} onOpenArticle={setArticle} />}
         {page === 'sop' && <SopView sopId={sopFocus.id} focusStep={sopFocus.step} asOf={asOf} onOpenArticle={setArticle} />}
         {page === 'admin' && <Admin meta={meta} onOpenArticle={setArticle} />}
         <div className="footer-note">
-          模型：{meta.llm.model}（開放權重，可於警局 H200 以 vLLM 地端部署）・向量模型：{meta.embedding}（地端執行）・法規資料：全國法規資料庫（{meta.corpus.dump_updated}）
+          模型：{meta.llm.model}
+          {meta.llm.model.startsWith('gemma') ? '（開放權重，可於警局 H200 以 vLLM 地端部署）' : '（簡報用雲端模型；正式版改用開放權重模型於警局 H200 地端部署）'}・向量模型：{meta.embedding}（地端執行）・法規資料：全國法規資料庫（{fmtDate(meta.corpus.dump_updated)} 更新）
           <br />
           本系統回答僅供勤務參考，實際執法以現行法規及主管機關解釋為準。
         </div>

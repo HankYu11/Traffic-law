@@ -11,6 +11,7 @@ interface Turn {
   sops: string[]
   expansions?: string[]
   phase: 'retrieving' | 'thinking' | 'writing' | 'done' | 'error'
+  startedAt: number
   verification?: Verification
   refused?: boolean
   timing?: { retrieval_ms: number; first_token_ms?: number; total_ms: number }
@@ -22,13 +23,13 @@ interface Turn {
   error?: string
 }
 
-const SUGGESTIONS: { tag: string; q: string; domain?: string }[] = [
+const SUGGESTIONS: { tag: string; q: string }[] = [
   { tag: '酒駕', q: '機車駕駛人酒測值 0.3 毫克，現場要怎麼處理？罰多少？' },
   { tag: '拒測', q: '駕駛人拒絕酒測，要告知哪些法律效果？' },
   { tag: '版本控管', q: '汽車駕駛人酒駕第一次被查獲，罰鍰是多少？' },
-  { tag: '程序', q: '實施酒測前要先問什麼？可以讓他漱口嗎？' },
-  { tag: '交通', q: '行經設有告示的酒測站不停車就跑了，要怎麼舉發？' },
-  { tag: '交通', q: '酒精濃度超過標準但只超過一點點，可以勸導不舉發嗎？' },
+  { tag: '酒測程序', q: '實施酒測前要先問什麼？可以讓他漱口嗎？' },
+  { tag: '交通執法', q: '開車時手持手機講電話，罰多少？' },
+  { tag: '交通執法', q: '汽車併排停車要怎麼處罰？' },
 ]
 
 export default function Chat({
@@ -67,7 +68,7 @@ export default function Chat({
       { role: 'user', content: t.q },
       { role: 'assistant', content: t.answer },
     ])
-    setTurns((ts) => [...ts, { q, answer: '', sources: [], pending: [], sops: [], phase: 'retrieving', asOf }])
+    setTurns((ts) => [...ts, { q, answer: '', sources: [], pending: [], sops: [], phase: 'retrieving', asOf, startedAt: Date.now() }])
     setActive(idx)
     try {
       await askStream({ question: q, domain, as_of: asOf, history }, (e) => {
@@ -98,8 +99,12 @@ export default function Chat({
   async function feedback(idx: number, rating: number, needsHuman = false) {
     const t = turns[idx]
     if (!t.queryId) return
-    await postJSON('/api/feedback', { query_id: t.queryId, rating, needs_human: needsHuman })
-    update(idx, { feedback: needsHuman ? 2 : rating })
+    try {
+      await postJSON('/api/feedback', { query_id: t.queryId, rating, needs_human: needsHuman })
+      update(idx, { feedback: needsHuman ? 2 : rating })
+    } catch {
+      /* 回饋失敗不影響問答 */
+    }
   }
 
   const cur = turns[active]
@@ -112,6 +117,7 @@ export default function Chat({
             <div className="empty">
               <h2>員警勤務法規助理</h2>
               <div>用口語描述現場狀況，系統依現行法規與作業程序回答，每一句都附出處、可點開看原文。</div>
+              <div className="muted small" style={{ marginTop: 6 }}>收錄範圍：交通執法、酒（毒）駕（9 部法規＋取締酒後駕車作業程序）</div>
               <div className="suggest">
                 {SUGGESTIONS.map((s) => (
                   <button key={s.q} onClick={() => send(s.q)}>
@@ -143,7 +149,7 @@ export default function Chat({
                 )}
                 {t.phase === 'thinking' && (
                   <div className="thinking">
-                    <span className="dot" /> 已找到 {t.sources.length} 筆相關條文，模型分析中…
+                    <span className="dot" /> 已找到 {t.sources.length} 筆相關條文，模型分析中… <Elapsed since={t.startedAt} />
                   </div>
                 )}
                 {t.phase === 'error' && <div className="notice warn">發生錯誤：{t.error}</div>}
@@ -218,7 +224,7 @@ export default function Chat({
         <div className="composer">
           <textarea
             value={input}
-            placeholder="描述現場狀況或輸入問題，例如：酒測值 0.2 毫克、未肇事，要怎麼開單？（Enter 送出，Shift+Enter 換行）"
+            placeholder="描述現場狀況，例如：酒測值 0.2 毫克、未肇事，要怎麼開單？"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -348,5 +354,19 @@ function VerifyBox({ v }: { v: Verification }) {
         </>
       )}
     </div>
+  )
+}
+
+function Elapsed({ since }: { since: number }) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const sec = Math.floor((Date.now() - since) / 1000)
+  return (
+    <span className="muted">
+      （{sec} 秒{sec >= 20 ? '，模型推理較久，請稍候' : ''}）
+    </span>
   )
 }

@@ -29,6 +29,7 @@ interface EvalItem {
 interface EvalReport {
   available: boolean
   run_at: string
+  baseline_note?: string
   model: string
   embedding: string
   as_of: string
@@ -175,9 +176,9 @@ function EvalTab() {
               <li>題庫 {r.n} 題：常見、少見、特殊情境、版本與施行日、應拒答（範圍外）。每題標註「應引用的條文」與「答案要點」。</li>
               <li>檢索命中：應引用的條文是否出現在系統取回的前 8 筆。</li>
               <li>回答正確：由評分模型依「答案要點」逐項判定，要點缺漏或數字錯誤即判錯；正式驗收時改由法規室人工複核。</li>
-              <li>對照組：同一個模型、不接知識庫直接回答，以相同標準評分。</li>
+              <li>對照組：同一個模型、不接知識庫直接回答，以相同標準評分。{r.baseline_note ? `（${r.baseline_note}）` : ''}</li>
               <li>
-                執行時間 {r.run_at}・模型 {r.model}・基準日 {r.as_of}・平均回應 {(s.avg_latency_ms / 1000).toFixed(1)} 秒
+                執行時間 {r.run_at}・模型 {r.model}・基準日 {r.as_of}・平均回應 {(s.avg_latency_ms / 1000).toFixed(1)} 秒（評估時多題並行、經雲端 API，非單人使用時間）
               </li>
             </ul>
           </div>
